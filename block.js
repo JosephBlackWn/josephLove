@@ -4,7 +4,7 @@
 
 function Element(tagName, props, children,type) {
     if (!(this instanceof Element)) {
-        return new Element(tagName, props, children);
+        return new Element(tagName, props, children, type);
     }
 
     this.tagName = tagName;
@@ -79,10 +79,7 @@ var handleBlock = function(){
 						hint:{text:hintVal},
 						button:{
 							cancel:{
-								show:false,
-								func:function(){
-									removeBlock();
-								}
+								show:false
 							}
 						}
 					}	
@@ -103,6 +100,7 @@ var handleBlock = function(){
 			buttonData = blockData.button;
 		
 		var canFadeIn = true;	//	是否fadeIn，否则直接css block
+
 		if($page.find(".work-fullpage").length > 0){
 			canFadeIn = false;
 		}
@@ -167,11 +165,11 @@ var handleBlock = function(){
 		if(blockType == 'query'){	
 			if(!blockData.hasOwnProperty("query")){
 				blockData.query = {		//	类型为query时
-					queryArr:[{ param : 'name', placeHolder : '输入姓名或手机', required : false }],
+					queryArr:[{ param : 'name', placeHolder : '输入姓名或手机', required : true }],
 					url:serverBase+'/sdbsCustomer/list',
 					text:'查询',
 					result:{
-						hArr:['选择','姓名','手机'],	//	第一个为"选择"
+						thArr:['选择','姓名','手机'],	//	第一个为"选择"
 						resultArr:[{type:'radio',needKey:[{key:'id',value:'customerId'}]},'name','mobile']	
 							//	第一个为input type，默认radio(其它为未写),其他值为key名
 					}
@@ -187,6 +185,13 @@ var handleBlock = function(){
 		
 		if(blockType == 'send'){ var sendArr = blockData.send; }
 		
+		if(blockType == 'upload'){
+			var sendArr = blockData.send,
+				uploadObj = blockData.upload;
+
+			sendArr = Array.isArray(sendArr) ? sendArr : [];	//	防止不存在
+		}
+
 		var h3Area = Element('h3',{'style':(blockTitle.style?blockTitle.style:"")},blockTitle.text?blockTitle.text:'确定这么做吗？',blockTitle.type),
 			bodyArea = '',
 			hintArea = '',
@@ -247,12 +252,37 @@ var handleBlock = function(){
 			break;
 		case 'confirm':			
 			break;																	//	END OF bodyArea SWICH('confirm')
+		case 'upload':
+			uploadObj;
+			var uploadAreaArr = [];
+			uploadAreaArr.push(Element('label',{'style':'display:block;margin-bottom:10px;'},[
+				/*Element('span',{},uploadObj.text),*/
+				Element('input',{
+					'class':'btn btn-primary input-sm work-fullpage-uploadinput',
+					'style':'display:block;width:100%;height:40px;',
+					'type':'file',
+					'name':uploadObj.param,
+					'data-url':uploadObj.url,
+					'data-file-type':uploadObj.fileType ? uploadObj.fileType : '',
+					'data-file-type-limit':uploadObj.fileTypeLimit ? uploadObj.fileTypeLimit : false,
+					'data-upload-data':(typeof uploadObj.uploadData == 'object' && uploadObj.uploadData != null) ? JSON.stringify(uploadObj.uploadData) : '{}'
+				})
+			]))
+			uploadAreaArr = uploadAreaArr.concat(labelLoopArr(sendArr,blockType));
+			bodyArea = Element('div',{'class':'work-fullpage-body'},uploadAreaArr);
+			break;																	//	END OF bodyArea SWICH('upload')
 		default:
 			break;
 		}
 		
 		if(JSON.stringify(hintData) != '{}'){
-			hintArea = Element('div',{'class':'mb10'},hintData.text,hintData.type);
+			var hintObj = {'class':'mb10 work-fullpage-hint'};
+			hintObj['style'] = '';
+			/*hintObj['style'] = 'min-height:19px;';*/
+			if(hintData.hasOwnProperty('textAlign')){
+				hintObj['style'] += 'text-align:'+hintData.textAlign + ';';
+			}
+			hintArea = Element('div',hintObj,hintData.text,hintData.type);
 		}																			
 		
 		var confirmArea = '',
@@ -260,7 +290,7 @@ var handleBlock = function(){
 			othersAreaArr = [];
 		
 		confirmData.attr = confirmData.attr || {};
-		if(options.type == 'query'){
+		if(options.type == 'query' || options.type == 'upload'){
 			confirmData.attr['disabled'] = "disabled";
 		}
 		confirmData.attr['class'] = confirmData.className ? (confirmData.className + ' btn btn-sm btn-primary i-btn-confirm mr5'):' btn btn-sm btn-primary i-btn-confirm mr5';
@@ -302,32 +332,41 @@ var handleBlock = function(){
 	
 	var labelLoopArr = function(arr,type){
 		var labelAreaArr = [];
+		var rightStyle = ''
 		for(var i = 0;i < arr.length; i++){	//	label
 			var labelCont = '';
 			if(arr[i].tagName == 'select'){	//	select	如果不是就input，暂时只支持text
 				var optionsArr = arr[i].optionsArr,
 					optionAreaArr = [];
 				for(var j = 0; j < optionsArr.length; j++){
-					optionAreaArr.push(Element('option',{'value':optionsArr[j].value},optionsArr[j].text,optionsArr[j].type));
+					var optionNeedObj = {'value' : optionsArr[j].value};
+					optionsArr[j].selected == true ? ( optionNeedObj.selected = "selected" ) : '';
+					optionAreaArr.push(Element( 'option', optionNeedObj, optionsArr[j].text, optionsArr[j].type));
 				}
 				labelCont = Element('select',{
 									'class' : ('form-control input-sm' + (type == 'query' ? ' i-qc-select' : '')),
+									'style':type == 'query' ? '' :'display:block;width:100%;',
 									'data-field' :  arr[i].param,
-									'data-required' : arr[i].required
+									'data-required' : arr[i].required?arr[i].required:false
 							},optionAreaArr);
 			}else{
 				labelCont = Element("input",{
 								'class' : 'form-control input-sm i-qc-input',
+								'style':type == 'query' ? '' :'display:block;width:100%;',
 								'placeholder' : (arr[i].placeHolder?arr[i].placeHolder:''),
 								'type' : 'text',
+								'value' : (isNull(arr[i].value) ? arr[i].value : ''),
 								'data-field' : arr[i].param,
-								'data-required' : arr[i].required
+								'data-required' : arr[i].required?arr[i].required:false
 							})
 			}		
 			if(type == 'query'){
 				labelAreaArr.push(Element('label',{'class':'mr5'},[labelCont]));
 			}else{
-				labelAreaArr.push(Element('label',{},[	Element('span',{'class':'mr5'},arr[i].text) ,labelCont]));
+				labelAreaArr.push(Element('label',{'class':'clearfix','style':'display:block;'},[
+					Element('span',{'style':'width:75px;overflow:hidden;text-align:right;float:left;line-height:30px;'},arr[i].text),
+					Element('span',{'style':'width:100%;padding-left:80px;margin-left:-75px;float:left;boxs-sizing:border-box;'},[labelCont])
+				]));
 			}			
 		}
 		return labelAreaArr;
@@ -437,6 +476,81 @@ var handleBlock = function(){
 		case 'send':
 			
 			break;
+		case 'upload':
+			var $uploadInput = $block.find('.work-fullpage-uploadinput'),
+				uploadData = $uploadInput.data("uploadData"),
+				$confirmBtn = $block.find('.i-btn-confirm');
+			if(typeof uploadData == 'string' || typeof uploadData == 'number' || typeof uploadData == 'boolean'){
+				uploadData = JSON.parse(uploadData);
+				if(typeof uploadData == 'string' || typeof uploadData == 'number' || typeof uploadData == 'boolean'){
+					uploadData = {};
+				}
+			}
+			$uploadInput.data("uploadData",uploadData);	//	把存的字符串改成对象
+
+			$uploadInput.on("change",function(){
+				var that = this,
+					$that = $(that),
+					fileName = that.value,
+					pointIndex,suffixName;	//	文件中最后.的位置变量，后缀名变量
+				$block.find(".work-fullpage-hint").removeClass("text-red").html("");
+				if(isNull(fileName)){
+					pointIndex = fileName.lastIndexOf('.');
+					if(pointIndex > -1){
+						suffixName =  fileName.substring(pointIndex + 1).toLowerCase();
+						// substring() 方法用于提取字符串中介于两个指定下标之间的字符，不接受负的参数
+					}else{
+						suffixName = '';
+					}
+					//	通过后缀名判断是否符合文件格式, 符合的按钮都disabled的为false
+					if(isNull(suffixName)){
+						var fileType = $that.data("fileType"),
+							fileTypeLimit = $that.data("fileTypeLimit"),
+							fileTypeArr = [];
+						if(fileTypeLimit){
+							fileTypeArr.push(fileType);
+						}else{
+							var obj = {
+									'jbg':'img',
+									'png':'img',
+									'jpeg':'img',
+									'gif':'img',
+									'xls':'excel',
+									'xlsx':'excel',
+									'doc':'word',
+									'docx':'word'
+							}
+
+							switch(obj[fileType]){
+							case 'img':
+								fileTypeArr = ['jpg','png','jpeg','gif'];
+								break;
+							case 'excel':
+								fileTypeArr = ['xls','xlsx'];
+								break;
+							case 'word':
+								fileTypeArr = ['doc','docx'];
+							default:
+								fileTypeArr.push(fileType);
+								break;
+							}
+						}
+
+						if(fileTypeArr.length > 0 && (fileTypeArr.indexOf(suffixName) > -1)){
+							$confirmBtn.attr("disabled",false);
+						}else{
+							swal("文件格式错误",'请选择' + fileTypeArr.toString() +'格式的文件',"warning");
+							$confirmBtn.attr("disabled",true);
+						}
+					}else{
+						$confirmBtn.attr("disabled",true);
+						swal("文件格式错误",'请选择格式正确的文件',"warning");
+					}
+				}else{
+					$confirmBtn.attr("disabled",true);
+				}
+			});
+			break;
 		default:
 			break;
 		}	
@@ -470,6 +584,84 @@ var handleBlock = function(){
 					return;
 				}
 				confirmData.func(returnVal);
+				break;
+			case "upload":
+				var that = this,
+					checked = $block.checkFieldFilled();
+				if(typeof checked !="boolean"){
+					swal(checked);
+					return;
+				}
+				if(!checked){
+					return;
+				}
+				var returnVal = $block.collectAllData();
+				if(typeof returnVal == "string"){
+					swal(returnVal);
+					return;
+				}
+				var $fileInput = $block.find(".work-fullpage-uploadinput"),
+					fileInput = $fileInput[0],
+					file = fileInput.files[0];
+				$(that).attr("disabled",true);
+				if(typeof file == undefined || file.size <= 0){
+					swal("请重新选择文件再提交");
+					return;
+				}else{
+					var formData = new FormData(),
+						dataObj = $fileInput.data("uploadData");
+					formData.append(fileInput.name,file);
+					for(var i in returnVal){
+						formData.append(i,returnVal[i]);
+					}
+					for(var j in dataObj){
+						formData.append(j,dataObj[j]);
+					}
+					var uploadUrl = $fileInput.data("url");
+
+					$.ajax({
+				        type: 'post',
+				        url: serverBase + uploadUrl,
+				        data: formData,
+				        cache: false,	//	不需要缓存
+				        processData: false,	//	不需要处理数据
+				        contentType: false,	//	格式默认
+				        success: function (data) {
+				        	$(that).attr("disabled",false);
+				        	switch(data.status){
+				        	case "succeed":
+				        		$block.find(".work-fullpage-hint").removeClass("text-red").html("");
+				        		$block.find("input[data-field]").val('');
+				        		$block.find("select[data-field]").each(function(index,el){
+				        			el.selectedIndex = -1;
+				        		})
+				        		fileInput.value = '';
+				        		confirmData.func();
+				        		break;
+				        	case "failWithFileId":
+				        		var addHTML = '上传错误，请查看错误文件<a class="btn btn-link" href="'+serverBase+'/sdepFile/'+data.result+'">错误文件</a>' ;
+				        		$block.find(".work-fullpage-hint").addClass('text-red').html(addHTML);
+				        		break;
+				        	case "empty":
+				        		$block.find(".work-fullpage-hint").removeClass("text-red");
+				        		break;
+				        	case "fail":
+				        		$block.find(".work-fullpage-hint").addClass('text-red').html(data.errorMsg==null?"未知错误，请召唤程序猿解决":data.errorMsg);
+				        		swal(data.errorMsg==null?"未知错误，请召唤程序猿解决":data.errorMsg);
+				        		break;
+				        	default:
+				        		break;
+				        	}
+				        },
+				        error:function(err){
+				        	$(that).attr("disabled",false);
+				        	console.log(err);
+				            swal("上传出错了，请召唤程序猿解决问题");
+				        }
+					});
+
+				}
+				/*confirmData.func(returnVal);*/
 				break;
 			default:
 				confirmData.func();
@@ -627,23 +819,25 @@ var handleBlock = function(){
 
 /*
  *	options = {
- *		type,	//	类型 query/send/confirm
+ *		type,	//	类型 query/send/confirm/upload
  *		size,
  *		blockData:{
  *			title:{ text, style, type },			//	小块的名称
  *			query:{		//	类型为query时
- *				queryArr:[ { param, placeHolder, required, tagName, type, optionsArr:[]} ],
- *						//	tagName为select时有optionsArr，不为是默认input type默认text
+ *				queryArr:[ { param, placeHolder, required, tagName, type, optionsArr:[],value,selected} ],
+ *											//	tagName为select时有optionsArr，不为是默认input type默认text
  *				url,
  *				text,
- *				result:{	//	类型为query时
- *					thArr:[],	//	第一个为"选择"
+ *				result:{					//	类型为query时
+ *					thArr:[],				//	第一个为"选择"
  *					resultArr:[{type,needKey:[{key,value}]},key]	//	第一个为input type以及提交所需变量，默认radio(其它为未写),其他值为key名
  *				}
  *			},
  *			hint:{ text, type, style }		// 	类型为不定时, type值'TEXT'||'HTML'
- *			send:[{ text, required, tagName, placeholder, param, type ,optionsArr:[]}],
+ *			send:[{ text, required, tagName, placeholder, param, type ,optionsArr:[],value,selected}],
  *					//	类型为send时
+ *			send:[{ text, required, tagName, placeholder, param, type ,optionsArr:[],value,selected }],
+ *			upload:{param,fileType,fileTypeLimit,text,uploadData},			//	类型为upload时,目前只支持单文件上传,uploadData是上传的参数
  *			button:{
  *				confirm:{
  *					className,
